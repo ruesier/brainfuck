@@ -1,3 +1,5 @@
+use std::vec::*;
+
 enum Operation {
     Add, // +
     Subtract, // -
@@ -5,12 +7,12 @@ enum Operation {
     Write, // .
     Left, // >
     Right, // <
-    Start(u32), // [
-    End(u32) // ]
+    Start(usize), // [
+    End(usize) // ]
 }
 
 struct Tape {
-    head: u32,
+    head: usize,
     data: Vec<i8>,
 }
 
@@ -18,30 +20,36 @@ impl Tape {
     fn new() -> Tape {
         Tape{
             head: 0,
-            data: Vec<u8>::new(),
+            data: Vec::new(),
         }
     }
 
-    fn add(&mut self, delta: i8) {
-        self.data[self.head] += delta;
+    fn add(&mut self, delta: &i8) {
+        self.data[self.head] += *delta;
     }
 
-    fn move(&mut self, delta: i8) {
+    fn shift_right(&mut self, delta: &usize) {
         while self.data.len() <= self.head + delta {
             self.data.push(0);
-        }
-        while self.head < -delta {
-            self.data.insert(0, 0);
-            self.head++;
         }
         self.head += delta;
     }
 
-    fn get(&self) -> &u8 {
-        self.data[self.head]
+    fn shift_left(&mut self, delta: &usize) {
+        while self.head < *delta {
+            self.data.insert(0, 0);
+            self.head += 1;
+        }
+        self.head -= delta;
     }
 
-    fn set(&mut self, &u8)
+    fn read(&self) -> i8 {
+        self.data[self.head].clone()
+    }
+
+    fn write(&mut self, val: &i8) {
+        self.data[self.head] = *val;
+    }
 }
 
 fn main() {

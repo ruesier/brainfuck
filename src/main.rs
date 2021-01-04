@@ -1,14 +1,30 @@
-use std::vec::*;
+use std::vec::Vec;
+use std::fmt;
 
 enum Operation {
     Add, // +
     Subtract, // -
     Read, // ,
     Write, // .
-    Left, // >
-    Right, // <
-    Start(usize), // [
-    End(usize) // ]
+    Left, // <
+    Right, // >
+    Start, // [
+    End // ]
+}
+
+impl fmt::Display for Operation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Operation::Add => write!(f, "+"),
+            Operation::Subtract => write!(f, "-"),
+            Operation::Read => write!(f, ","),
+            Operation::Write => write!(f, "."),
+            Operation::Left => write!(f, "<"),
+            Operation::Right => write!(f, ">"),
+            Operation::Start => write!(f, "["),
+            Operation::End => write!(f, "]"),
+        }
+    }
 }
 
 struct Tape {
@@ -20,7 +36,7 @@ impl Tape {
     fn new() -> Tape {
         Tape{
             head: 0,
-            data: Vec::new(),
+            data: vec![0],
         }
     }
 
@@ -52,6 +68,154 @@ impl Tape {
     }
 }
 
-fn main() {
-    println!("Hello, world!");
+impl fmt::Display for Tape {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut tape = String::new();
+        if self.head == 0 {
+            tape.push_str(format!("<{}>", self.data[0]).as_str());
+        } else {
+            tape.push_str(format!("{}", self.data[0]).as_str());
+        }
+        for i in 1..self.data.len() {
+            if self.head == i {
+                tape.push_str(format!(" <{}>", self.data[i]).as_str());
+            } else {
+                tape.push_str(format!(" {}", self.data[i]).as_str());
+            }
+        }
+        write!(f, "{}", tape)
+    }
+}
+
+struct Machine {
+    tape: Tape,
+    operations: Vec<Operation>,
+    instruction_pointer: usize,
+    loop_stack: Vec<usize>,
+    jumping: Option<usize>,
+}
+
+impl Machine {
+    fn new(operations: Vec<Operation>) -> Machine {
+        Machine {
+            tape: Tape::new(),
+            operations,
+            instruction_pointer: 0,
+            loop_stack: Vec::new(),
+            jumping: None,
+        }
+    }
+
+    fn step(&mut self, read: &mut dyn io::Read, write: &mut dyn io::Write) -> bool { // returns false when no more operations to perform
+        if self.instruction_pointer >= self.operations.len() {
+            return false;
+        }
+        match self.jumping {
+            None => match self.operations[self.instruction_pointer] {
+                Operation::Add => self.tape.add(&1),
+                Operation::Subtract => self.tape.add(&-1),
+                Operation::Read => {
+                    let buf: &mut [u8; 1] = &mut [0];
+                    read.read_exact(buf).expect(format!("read failed, ip = {}", self.instruction_pointer).as_str());
+                    self.tape.write(&(buf[0] as i8));
+                },
+                Operation::Write => {
+                    let buf = &[self.tape.read() as u8];
+                    write.write(buf).expect(format!("write failed, ip = {}", self.instruction_pointer).as_str());
+                },
+                Operation::Left => {
+                    self.tape.shift_left(&1);
+                },
+                Operation::Right => {
+                    self.tape.shift_right(&1);
+                },
+                Operation::Start => {
+                    if self.tape.read() == 0 {
+                        self.jumping = Some(self.instruction_pointer);
+                    }
+                    self.loop_stack.push(self.instruction_pointer);
+                },
+                Operation::End => {
+                    let jump = self.loop_stack.pop().unwrap();
+                    if self.tape.read() != 0 {
+                        self.instruction_pointer = jump;
+                        return true;
+                    }
+                },
+            },
+            Some(from) => match self.operations[self.instruction_pointer] {
+                Operation::Start => {
+                    self.loop_stack.push(self.instruction_pointer);
+                },
+                Operation::End => {
+                    let start = self.loop_stack.pop().unwrap();
+                    if from == start {
+                        self.jumping = None;
+                    }
+                },
+                _ => {},
+            },
+        };
+        self.instruction_pointer += 1;
+        self.instruction_pointer < self.operations.len()
+    }
+}
+
+#[macro_use]
+extern crate clap;
+use clap::App;
+
+use std::fs::read;
+use std::io;
+
+fn main() -> io::Result<()> {
+    let yml_config = load_yaml!("cli.yml");
+    let matches = App::from_yaml(yml_config).get_matches();
+
+    let script_name = matches.value_of("SCRIPT").unwrap();
+
+    let script = read(script_name)?;
+
+    let mut operations: Vec<Operation> = Vec::new();
+    for c in script {
+        match c {
+            b'+' => {
+                operations.push(Operation::Add);
+            },
+            b'-' => {
+                operations.push(Operation::Subtract);
+            },
+            b',' => {
+                operations.push(Operation::Read);
+            },
+            b'.' => {
+                operations.push(Operation::Write);
+            },
+            b'>' => {
+                operations.push(Operation::Right);
+            },
+            b'<' => {
+                operations.push(Operation::Left);
+            },
+            b'[' => {
+                operations.push(Operation::Start);
+            },
+            b']' => {
+                operations.push(Operation::End);
+            },
+            _ => {},
+        }
+    }
+    let debug = matches.is_present("debug");
+    let mut m = Machine::new(operations);
+    if debug {
+        println!("{}: {}", m.tape, m.operations[m.instruction_pointer])
+    }
+    while m.step(&mut io::stdin(), &mut io::stdout()) {
+        if debug {
+            println!("{}: {}", m.tape, m.operations[m.instruction_pointer]);
+        }
+    }
+    println!("");
+    Ok(())
 }

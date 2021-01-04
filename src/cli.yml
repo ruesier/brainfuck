@@ -1,0 +1,13 @@
+name: brainfuck
+version: "0.1"
+author: Devon Call <callbrentdevon@gmail.com>
+about: esoteric language brainfuck interpretor
+args:
+  - SCRIPT:
+      help: brainfuck script file
+      required: true
+      index: 1
+  - debug:
+      short: d
+      long: debug
+      help: prints tape sequences

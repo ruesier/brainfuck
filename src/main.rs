@@ -223,11 +223,11 @@ fn main() -> io::Result<()> {
     let debug = matches.is_present("debug");
     let mut m = Machine::new(operations);
     if debug {
-        eprintln!("{:20}", m)
+        eprintln!("{:.20}", m)
     }
     while m.step(&mut io::stdin(), &mut io::stdout()) {
         if debug {
-            eprintln!("{:20}", m);
+            eprintln!("{:.20}", m);
         }
     }
     println!("\nEND");

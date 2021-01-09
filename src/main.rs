@@ -1,6 +1,7 @@
 use std::vec::Vec;
 use std::fmt;
 
+#[derive(Clone, Copy)]
 enum Operation {
     Add, // +
     Subtract, // -
@@ -27,44 +28,50 @@ impl fmt::Display for Operation {
     }
 }
 
+use std::num::Wrapping;
+
 struct Tape {
     head: usize,
-    data: Vec<i8>,
+    data: Vec<Wrapping<u8>>,
 }
 
 impl Tape {
     fn new() -> Tape {
         Tape{
             head: 0,
-            data: vec![0],
+            data: vec![Wrapping(0)],
         }
     }
 
-    fn add(&mut self, delta: &i8) {
-        self.data[self.head] += *delta;
+    fn add(&mut self, delta: &u8) {
+        self.data[self.head] += Wrapping(*delta);
+    }
+
+    fn subtract(&mut self, delta: &u8) {
+        self.data[self.head] -= Wrapping(*delta);
     }
 
     fn shift_right(&mut self, delta: &usize) {
         while self.data.len() <= self.head + delta {
-            self.data.push(0);
+            self.data.push(Wrapping(0));
         }
         self.head += delta;
     }
 
     fn shift_left(&mut self, delta: &usize) {
         while self.head < *delta {
-            self.data.insert(0, 0);
+            self.data.insert(0, Wrapping(0));
             self.head += 1;
         }
         self.head -= delta;
     }
 
-    fn read(&self) -> i8 {
-        self.data[self.head].clone()
+    fn read(&self) -> u8 {
+        self.data[self.head].0.clone()
     }
 
-    fn write(&mut self, val: &i8) {
-        self.data[self.head] = *val;
+    fn write(&mut self, val: &u8) {
+        self.data[self.head] = Wrapping(*val);
     }
 }
 
@@ -113,14 +120,14 @@ impl Machine {
         match self.jumping {
             None => match self.operations[self.instruction_pointer] {
                 Operation::Add => self.tape.add(&1),
-                Operation::Subtract => self.tape.add(&-1),
+                Operation::Subtract => self.tape.subtract(&1),
                 Operation::Read => {
                     let buf: &mut [u8; 1] = &mut [0];
                     read.read_exact(buf).expect(format!("read failed, ip = {}", self.instruction_pointer).as_str());
-                    self.tape.write(&(buf[0] as i8));
+                    self.tape.write(&(buf[0]));
                 },
                 Operation::Write => {
-                    let buf = &[self.tape.read() as u8];
+                    let buf = &[self.tape.read()];
                     write.write(buf).expect(format!("write failed, ip = {}", self.instruction_pointer).as_str());
                 },
                 Operation::Left => {
@@ -158,6 +165,13 @@ impl Machine {
         };
         self.instruction_pointer += 1;
         self.instruction_pointer < self.operations.len()
+    }
+}
+
+impl fmt::Display for Machine {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let ops: Vec<String> = self.operations[self.instruction_pointer..].to_vec().iter().map(|x| format!("{}", x)).collect();
+        write!(f, "{}: {}", self.tape, ops.join(""))
     }
 }
 
@@ -209,13 +223,13 @@ fn main() -> io::Result<()> {
     let debug = matches.is_present("debug");
     let mut m = Machine::new(operations);
     if debug {
-        println!("{}: {}", m.tape, m.operations[m.instruction_pointer])
+        eprintln!("{:20}", m)
     }
     while m.step(&mut io::stdin(), &mut io::stdout()) {
         if debug {
-            println!("{}: {}", m.tape, m.operations[m.instruction_pointer]);
+            eprintln!("{:20}", m);
         }
     }
-    println!("");
+    println!("\nEND");
     Ok(())
 }
